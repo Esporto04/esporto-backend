@@ -1,7 +1,9 @@
 from flask import Flask, request, render_template, redirect, url_for
+from flask_cors import CORS
 import sqlite3, os
 
 app = Flask(__name__)
+CORS(app)
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
