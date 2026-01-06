@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for
+from flask import Flask, request, render_template, redirect, url_for, send_file
 from flask_cors import CORS
 import sqlite3, os
 
@@ -26,6 +26,11 @@ def ensure_table():
     """)
     db.commit()
     db.close()
+
+@app.route("/uploads/<filename>")
+def uploads(filename):
+    """Serve uploaded files from the uploads folder"""
+    return send_file(os.path.join(UPLOAD_FOLDER, filename))
 
 @app.route("/register", methods=["POST"])
 def register():
