@@ -1,6 +1,7 @@
 from flask import Flask, request, render_template, redirect, url_for, send_file
 from flask_cors import CORS
 import psycopg2
+from urllib.parse import urlparse
 import os
 
 app = Flask(__name__)
@@ -10,13 +11,21 @@ UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def get_db():
-    """Connect to PostgreSQL database"""
+    """Connect to PostgreSQL database using DATABASE_URL"""
+    database_url = os.environ.get('DATABASE_URL')
+    
+    if not database_url:
+        raise Exception("DATABASE_URL environment variable not set")
+    
+    # Parse DATABASE_URL (format: postgresql://user:password@host:port/dbname)
+    parsed = urlparse(database_url)
+    
     conn = psycopg2.connect(
-        host=os.environ.get('DB_HOST', 'localhost'),
-        database=os.environ.get('DB_NAME', 'esporto'),
-        user=os.environ.get('DB_USER', 'postgres'),
-        password=os.environ.get('DB_PASSWORD', 'password'),
-        port=os.environ.get('DB_PORT', '5432')
+        host=parsed.hostname,
+        database=parsed.path[1:],  # Remove leading slash
+        user=parsed.username,
+        password=parsed.password,
+        port=parsed.port or 5432
     )
     return conn
 
