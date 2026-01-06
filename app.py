@@ -11,8 +11,8 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 def get_db():
     return sqlite3.connect("database.db")
 
-def init_db():
-    """Initialize the database and create tables if they don't exist"""
+def ensure_table():
+    """Ensure the players table exists before every database operation"""
     db = get_db()
     cur = db.cursor()
     cur.execute("""
@@ -29,6 +29,7 @@ def init_db():
 
 @app.route("/register", methods=["POST"])
 def register():
+    ensure_table()
     name = request.form["name"]
     uid = request.form["uid"]
     screenshot = request.files["screenshot"]
@@ -48,6 +49,7 @@ def register():
 
 @app.route("/admin")
 def admin():
+    ensure_table()
     db = get_db()
     cur = db.cursor()
     cur.execute("SELECT * FROM players")
@@ -57,6 +59,7 @@ def admin():
 
 @app.route("/approve/<int:id>")
 def approve(id):
+    ensure_table()
     db = get_db()
     cur = db.cursor()
     cur.execute("UPDATE players SET status='Approved' WHERE id=?", (id,))
@@ -66,6 +69,7 @@ def approve(id):
 
 @app.route("/status", methods=["GET", "POST"])
 def status():
+    ensure_table()
     if request.method == "POST":
         name = request.form["name"]
         uid = request.form["uid"]
@@ -81,5 +85,4 @@ def status():
     return render_template("status.html")
 
 if __name__ == "__main__":
-    init_db()
     app.run(debug=False)
