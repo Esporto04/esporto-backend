@@ -58,5 +58,21 @@ def approve(id):
     db.close()
     return redirect(url_for("admin"))
 
+@app.route("/status", methods=["GET", "POST"])
+def status():
+    if request.method == "POST":
+        name = request.form["name"]
+        uid = request.form["uid"]
+        db = get_db()
+        cur = db.cursor()
+        cur.execute("SELECT status FROM players WHERE name=? AND uid=?", (name, uid))
+        result = cur.fetchone()
+        db.close()
+        if result:
+            return f"<h1>Status: {result[0]}</h1>"
+        else:
+            return "<h1>Registration not found</h1>"
+    return render_template("status.html")
+
 if __name__ == "__main__":
         app.run(debug=False)
