@@ -1,6 +1,7 @@
 from flask import Flask, request, render_template, redirect, url_for, send_file
 from flask_cors import CORS
-import sqlite3, os
+import psycopg2
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -9,23 +10,33 @@ UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 def get_db():
-    return sqlite3.connect("database.db")
+    """Connect to PostgreSQL database"""
+    conn = psycopg2.connect(
+        host=os.environ.get('DB_HOST', 'localhost'),
+        database=os.environ.get('DB_NAME', 'esporto'),
+        user=os.environ.get('DB_USER', 'postgres'),
+        password=os.environ.get('DB_PASSWORD', 'password'),
+        port=os.environ.get('DB_PORT', '5432')
+    )
+    return conn
 
 def ensure_table():
     """Ensure the players table exists before every database operation"""
-    db = get_db()
-    cur = db.cursor()
+    conn = get_db()
+    cur = conn.cursor()
     cur.execute("""
     CREATE TABLE IF NOT EXISTS players (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         name TEXT,
         uid TEXT,
         screenshot TEXT,
-        status TEXT
+        status TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """)
-    db.commit()
-    db.close()
+    conn.commit()
+    cur.close()
+    conn.close()
 
 @app.route("/uploads/<filename>")
 def uploads(filename):
@@ -34,60 +45,76 @@ def uploads(filename):
 
 @app.route("/register", methods=["POST"])
 def register():
-    ensure_table()
-    name = request.form["name"]
-    uid = request.form["uid"]
-    screenshot = request.files["screenshot"]
-    
-    filename = f"{uid}_{screenshot.filename}"
-    screenshot.save(os.path.join(UPLOAD_FOLDER, filename))
-    
-    db = get_db()
-    cur = db.cursor()
-    cur.execute(
-        "INSERT INTO players VALUES (NULL, ?, ?, ?, ?)",
-        (name, uid, filename, "Pending")
-    )
-    db.commit()
-    db.close()
-    return "Registration submitted successfully. Wait for admin approval."
+    try:
+        ensure_table()
+        name = request.form["name"]
+        uid = request.form["uid"]
+        screenshot = request.files["screenshot"]
+        
+        filename = f"{uid}_{screenshot.filename}"
+        screenshot.save(os.path.join(UPLOAD_FOLDER, filename))
+        
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO players (name, uid, screenshot, status) VALUES (%s, %s, %s, %s)",
+            (name, uid, filename, "Pending")
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+        return "Registration submitted successfully. Wait for admin approval."
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 @app.route("/admin")
 def admin():
-    ensure_table()
-    db = get_db()
-    cur = db.cursor()
-    cur.execute("SELECT * FROM players")
-    players = cur.fetchall()
-    db.close()
-    return render_template("admin.html", players=players)
+    try:
+        ensure_table()
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT id, name, uid, screenshot, status FROM players ORDER BY created_at DESC")
+        players = cur.fetchall()
+        cur.close()
+        conn.close()
+        return render_template("admin.html", players=players)
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 @app.route("/approve/<int:id>")
 def approve(id):
-    ensure_table()
-    db = get_db()
-    cur = db.cursor()
-    cur.execute("UPDATE players SET status='Approved' WHERE id=?", (id,))
-    db.commit()
-    db.close()
-    return redirect(url_for("admin"))
+    try:
+        ensure_table()
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("UPDATE players SET status=%s WHERE id=%s", ("Approved", id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return redirect(url_for("admin"))
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 @app.route("/status", methods=["GET", "POST"])
 def status():
-    ensure_table()
-    if request.method == "POST":
-        name = request.form["name"]
-        uid = request.form["uid"]
-        db = get_db()
-        cur = db.cursor()
-        cur.execute("SELECT status FROM players WHERE name=? AND uid=?", (name, uid))
-        result = cur.fetchone()
-        db.close()
-        if result:
-            return f"<h1>Status: {result[0]}</h1>"
-        else:
-            return "<h1>Registration not found</h1>"
-    return render_template("status.html")
+    try:
+        ensure_table()
+        if request.method == "POST":
+            name = request.form["name"]
+            uid = request.form["uid"]
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute("SELECT status FROM players WHERE name=%s AND uid=%s", (name, uid))
+            result = cur.fetchone()
+            cur.close()
+            conn.close()
+            if result:
+                return f"<h1>Status: {result[0]}</h1>"
+            else:
+                return "<h1>Registration not found</h1>"
+        return render_template("status.html")
+    except Exception as e:
+        return f"Error: {str(e)}", 500
 
 if __name__ == "__main__":
     app.run(debug=False)
