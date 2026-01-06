@@ -57,4 +57,4 @@ def approve(id):
     return redirect(url_for("admin"))
 
 if __name__ == "__main__":
-    app.run()
+        app.run(debug=False)
